@@ -72,7 +72,7 @@ class SmppClient
 	
 	protected $pdu_queue;
 	
-	protected $transport;
+	public $transport;
 	protected $debugHandler;
 	
 	// Used for reconnect
@@ -93,7 +93,7 @@ class SmppClient
 	{
 		// Internal parameters
 		$this->sequence_number=1;
-		$this->debug=false;
+		$this->debug=true;
 		$this->pdu_queue=array();
 		
 		$this->transport = $transport;
@@ -138,6 +138,26 @@ class SmppClient
 		$this->login = $login;
 		$this->pass = $pass;
 	}
+
+	/**
+	 * Binds the transreceiver. One object can be bound to both transmit and receive.
+	 * @param string $login - ESME system_id
+	 * @param string $pass - ESME password
+	 * @throws SmppException
+	 */
+	public function bindTransreceiver($login, $pass)
+	{
+		if (!$this->transport->isOpen()) return false;
+		if($this->debug) call_user_func($this->debugHandler, 'Binding transreceiver...');
+		
+		$response = $this->_bind($login, $pass, SMPP::BIND_TRANSCEIVER);
+		
+		if($this->debug) call_user_func($this->debugHandler, "Binding status  : ".$response->status);
+		$this->mode = 'transreceiver';
+		$this->login = $login;
+		$this->pass = $pass;
+	}
+
 	
 	/**
 	 * Closes the session on the SMSC server.
@@ -555,6 +575,17 @@ class SmppClient
 		$response = $this->sendCommand(SMPP::ENQUIRE_LINK, null);
 		return $response;
 	}
+
+	/** 
+	 * Send the unbind command.
+	 * @Return SmppPdu
+	 * Magojr
+	 */
+	public function unbind()
+	{
+		$response=$this->sendCommand(SMPP::UNBIND,"");
+		return $response;
+	}
 	
 	/**
 	 * Respond to any enquire link we might have waiting.
@@ -590,8 +621,9 @@ class SmppClient
 	/**
 	 * Reconnect to SMSC.
 	 * This is mostly to deal with the situation were we run out of sequence numbers
+	 * Magojr switch to public
 	 */
-	protected function reconnect()
+	public function reconnect()
 	{
 		$this->close();
 		sleep(1);
@@ -600,8 +632,10 @@ class SmppClient
 		
 		if ($this->mode == 'receiver') {
 			$this->bindReceiver($this->login, $this->pass);
-		} else {
+		} elseif ($this->mode == 'transmitter') {
 			$this->bindTransmitter($this->login, $this->pass);
+		} else {
+			$this->bindTransreceiver($this->login, $this->pass);
 		}
 	}
 	
